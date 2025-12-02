@@ -1,11 +1,11 @@
 using UnityEngine;
 using UnityEditor;
 
-/// <summary>
-/// Custom editor for TrafficLane.
-/// This script provides interactive handles in the Scene View to edit the Bezier curve.
-/// </summary>
+
 [CustomEditor(typeof(TrafficLane))]
+/// <summary>
+/// Editor script for editing TrafficLane Bezier curves in the Scene view.
+/// </summary>
 public class TrafficLaneEditor : Editor
 {
     private TrafficLane lane;
@@ -15,9 +15,7 @@ public class TrafficLaneEditor : Editor
     private const float handleSize = 0.2f;
     private const float pickSize = 0.3f;
 
-    /// <summary>
-    /// Renders the scene view
-    /// </summary>
+
     private void OnSceneGUI()
     {
         lane = target as TrafficLane;
@@ -25,10 +23,8 @@ public class TrafficLaneEditor : Editor
             return;
 
         handleTransform = lane.transform;
-        //Use the lane's rotation for the handles orientation
         handleRotation = handleTransform.rotation;
 
-        //Get world space points
         Vector3 p0 = handleTransform.TransformPoint(lane.p0);
         Vector3 p1 = handleTransform.TransformPoint(lane.p1);
         Vector3 p2 = handleTransform.TransformPoint(lane.p2);
@@ -109,9 +105,6 @@ public class TrafficLaneEditor : Editor
         }
     }
 
-    /// <summary>
-    /// Helper function to draw a standard handle.
-    /// </summary>
     private Vector3 DrawHandle(Vector3 worldPoint)
     {
         float size = HandleUtility.GetHandleSize(worldPoint) * handleSize;

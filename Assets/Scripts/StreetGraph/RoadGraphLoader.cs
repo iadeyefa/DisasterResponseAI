@@ -7,17 +7,17 @@ public class RoadGraphLoader : MonoBehaviour
     public RoadGraphData RawData { get; private set; }
     public RoadGraph Graph { get; private set; }
 
-    private void Awake()
+    public void LoadGraphData()
     {
         if (roadJson == null)
         {
-            Debug.LogError("RoadGraphLoader: roadJson not assigned.");
+            Debug.LogError("roadJson not assigned");
             return;
         }
 
         RawData = JsonUtility.FromJson<RoadGraphData>(roadJson.text);
         Graph = new RoadGraph(RawData);
 
-        Debug.Log($"RoadGraphLoader: Loaded {Graph.Nodes.Count} nodes, {RawData.edges.Length} edges.");
+        Debug.Log($"Loaded {Graph.Nodes.Count} nodes, {RawData.edges.Length} edges.");
     }
 }

@@ -2,11 +2,13 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 /// <summary>
 /// A tool to analyze the road network and notify of any problems
 /// </summary>
 public class RoadSystemAnalyzer : EditorWindow
 {
+    public GameObject trafficLightPrefab; 
     private Vector2 scrollPos;
     // Updated lists to store the lane along with the message
     private List<KeyValuePair<string, TrafficLane>> errors = new List<KeyValuePair<string, TrafficLane>>();
@@ -28,7 +30,6 @@ public class RoadSystemAnalyzer : EditorWindow
     private void OnGUI()
     {
         GUILayout.Label("Road Network Analysis Tool", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("This tool will scan all TrafficLanes in your scene for errors, warnings, and connectivity problems.", MessageType.Info);
 
         //Analyze network button
         if (GUILayout.Button("Analyze Entire Road Network", GUILayout.Height(40)))
@@ -56,7 +57,6 @@ public class RoadSystemAnalyzer : EditorWindow
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.HelpBox(entry.Key, MessageType.Error, true);
 
-                //Allows for user to select problem lane
                 if (GUILayout.Button("Select", GUILayout.Width(60)))
                 {
                     if (entry.Value != null)
@@ -116,10 +116,10 @@ public class RoadSystemAnalyzer : EditorWindow
 
         // Find all lanes in the scene
         TrafficLane[] allLanes = FindObjectsOfType<TrafficLane>();
+        TrafficIntersection[] allTrafficIntersections = FindObjectsOfType<TrafficIntersection>();
         if (allLanes.Length == 0)
         {
             warnings.Add(new KeyValuePair<string, TrafficLane>("No TrafficLanes found in the scene.", null));
-            Debug.LogWarning("Analysis complete: No TrafficLanes found.");
             return;
         }
 
@@ -127,11 +127,92 @@ public class RoadSystemAnalyzer : EditorWindow
         HashSet<TrafficLane> visitedLanes = new HashSet<TrafficLane>();
         List<HashSet<TrafficLane>> graphs = new List<HashSet<TrafficLane>>();
 
+
+        GameObject trafficPrefab = null;
+
+        GameObject[] selectedObjects = Selection.gameObjects;
+     
+
+
+        //foreach (TrafficIntersection inter in allTrafficIntersections)
+        //{
+        //    inter.RebuildIntersection();
+        //}
+        //RoadSegment[] segs = FindObjectsOfType<RoadSegment>();
+        //for (int i = 0; i < segs.Length; i++)
+        //{
+        //    segs[i].RebuildRoad();
+
+        //}
+
+
+        //foreach (TrafficIntersection inter in allTrafficIntersections)
+        //{
+        //    if(inter.connectors.Count == 1 && inter.connectors[0].incomingStubs.Count == 1 && inter.connectors[0].outgoingStubs.Count == 1)
+        //    {
+        //        inter.connectors[0].incomingStubs[0].nextLanes = new List<TrafficLane> { inter.connectors[0].outgoingStubs[0] };
+        //        inter.connectors[0].outgoingStubs[0].previousLanes = new List<TrafficLane> { inter.connectors[0].incomingStubs[0] };
+        //    }
+
+
+        //}
+
+
         //Check each lane for issues
+        allLanes = FindObjectsOfType<TrafficLane>();
         foreach (TrafficLane lane in allLanes)
         {
+            //lane.transform.localPosition = new Vector3(lane.transform.localPosition.x, 0, lane.transform.localPosition.z);
+
+            //TrafficIntersection inter = lane.transform.parent.GetComponent<TrafficIntersection>();
+            //if(inter == null)
+            //{
+            //    //lane.transform.parent.transform.localPosition = new Vector3(lane.transform.parent.transform.localPosition.x, 0, lane.transform.parent.transform.localPosition.z);
+
+            //}
+            //Vector3 worldP0 = lane.transform.TransformPoint(lane.p0);
+            //Vector3 worldP1 = lane.transform.TransformPoint(lane.p1);
+            //Vector3 worldP2 = lane.transform.TransformPoint(lane.p2);
+            //Vector3 worldP3 = lane.transform.TransformPoint(lane.p3);
+
+            //// 2. Raycast using World coordinates
+            //worldP0 = GetSnappedPoint(worldP0);
+            //worldP1 = GetSnappedPoint(worldP1);
+            //worldP2 = GetSnappedPoint(worldP2);
+            //worldP3 = GetSnappedPoint(worldP3);
+
+            //// 3. Convert World back to Local and save
+            //lane.p0 = lane.transform.InverseTransformPoint(worldP0);
+            //lane.p1 = lane.transform.InverseTransformPoint(worldP1);
+            //lane.p2 = lane.transform.InverseTransformPoint(worldP2);
+            //lane.p3 = lane.transform.InverseTransformPoint(worldP3);
+            //lane.p0 = new Vector3(lane.p0.x, 0, lane.p0.z);
+            //lane.p1 = new Vector3(lane.p1.x, 0, lane.p1.z);
+            //lane.p2 = new Vector3(lane.p2.x, 0, lane.p2.z);
+            //lane.p3 = new Vector3(lane.p3.x, 0, lane.p3.z);
             CheckLane(lane);
         }
+
+        //TrafficLightGroup[] lights = FindObjectsOfType<TrafficLightGroup>();
+        //foreach (TrafficLightGroup light in lights)
+        //{
+        //    for (int i = 0; i < light.lightGroups.Count; i++)
+        //    {
+        //        for (int j = 0; j < light.lightGroups[i].onTrafficLights.Length; j++)
+        //        {
+        //            if(light.lightGroups[i].lanes[0] == null)
+        //            {
+        //                continue;
+        //            }
+
+        //            light.lightGroups[i].onTrafficLights[j].transform.position
+        //                = new Vector3(light.lightGroups[i].onTrafficLights[j].transform.position.x,
+        //                light.lightGroups[i].lanes[0].GetWorldPoint(0).y,
+        //                light.lightGroups[i].onTrafficLights[j].transform.position.z);
+        //        }
+        //    }
+        //}
+
 
         //Check for disconnected graphs
         foreach (TrafficLane lane in allLanes)
@@ -185,17 +266,16 @@ public class RoadSystemAnalyzer : EditorWindow
 
         //Report graph analysis
         graphInfo.Add($"Found {allLanes.Length} total lanes.");
-        graphInfo.Add($"Network is divided into {graphs.Count} disconnected graph(s).");
+        graphInfo.Add($"Network is divided into {graphs.Count} discnnected graph(s).");
 
         if (graphs.Count > 1)
         {
-            graphInfo.Add("This is likely the cause of your 'Could not find path' error!");
             for (int i = 0; i < graphs.Count; i++)
             {
-                graphInfo.Add($"  Graph {i + 1} contains {graphs[i].Count} lanes.");
+                graphInfo.Add($"  Graph  {i + 1} contains {graphs[i].Count} lanes.");
                 if (graphs[i].Count > 0)
                 {
-                    Debug.LogWarning($"Graph {i + 1} (example lane: {graphs[i].First().name}). Your vehicle cannot route from this graph to another.", graphs[i].First());
+                    Debug.LogWarning($"Graph {i + 1}  Your vehicle cannot route from this graph to another.", graphs[i].First());
                 }
             }
         }
@@ -248,6 +328,19 @@ public class RoadSystemAnalyzer : EditorWindow
             warnings.Add(new KeyValuePair<string, TrafficLane>(warning, lane));
             Debug.LogWarning(warning, lane);
         }
+    }
+
+    private Vector3 GetSnappedPoint(Vector3 currentPos)
+    {
+        int layerMask = LayerMask.GetMask("Ground");
+        Vector3 rayOrigin = new Vector3(currentPos.x, currentPos.y + 50f, currentPos.z);
+
+        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 500f, layerMask))
+        {
+            return hit.point;
+        }
+
+        return new Vector3(currentPos.x, 0, currentPos.z);
     }
 }
 
