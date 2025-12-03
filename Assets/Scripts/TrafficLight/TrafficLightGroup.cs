@@ -39,6 +39,10 @@ public class TrafficLightGroup : MonoBehaviour
     private int currentGroupIndex = 0;
     public float currentIntersectionPainScore = 0f;
 
+    public bool useRandomStagger = true;
+    public float minStaggerDelay = 0f;
+    public float maxStaggerDelay = 20f;
+
     void Start()
     {
         currentMode = TrafficMode.BasicLoop;
@@ -47,7 +51,17 @@ public class TrafficLightGroup : MonoBehaviour
         foreach (var group in lightGroups) SetGroupState(group, LightColor.Red);
 
         StopAllCoroutines();
-        StartCoroutine(TrafficCycleRoutine());
+
+
+        float initialDelay = 0f;
+        if (useRandomStagger)
+        {
+            initialDelay = Random.Range(minStaggerDelay, maxStaggerDelay);
+        }
+
+        StartCoroutine(TrafficCycleRoutine(initialDelay));
+
+
     }
 
     /// <summary>
@@ -64,16 +78,21 @@ public class TrafficLightGroup : MonoBehaviour
         {
             currentMode = mode;
             StopAllCoroutines();
-            StartCoroutine(TrafficCycleRoutine());
+            StartCoroutine(TrafficCycleRoutine(0f));
         }
     }
 
     /// <summary>
     /// Main loop logic for cycling through traffic lights
     /// </summary>
-    private IEnumerator TrafficCycleRoutine()
+    private IEnumerator TrafficCycleRoutine(float startupDelay = 0f)
     {
         if (lightGroups.Count == 0) yield break;
+
+        if (startupDelay > 0f)
+        {
+            yield return new WaitForSeconds(startupDelay);
+        }
 
         currentGroupIndex = 0;
 
