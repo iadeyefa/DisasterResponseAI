@@ -2,18 +2,20 @@
 using System.Collections;
 using System.Collections.Generic;
 
-
 public enum TrafficMode
 {
-    BasicLoop, 
-    SmartAI 
+    BasicLoop,
+    SmartAI
 }
+
+
+
 /// <summary>
 /// Intersection Traffic Lights Manager
 /// </summary>
 public class TrafficLightGroup : MonoBehaviour
 {
-    public TrafficMode currentMode = TrafficMode.SmartAI;
+    public TrafficMode currentMode = TrafficMode.BasicLoop;
 
     [System.Serializable]
     public class LaneGroup
@@ -25,12 +27,12 @@ public class TrafficLightGroup : MonoBehaviour
 
     public List<LaneGroup> lightGroups = new List<LaneGroup>();
 
-    private float fixedGreenDuration = 20.0f;
-    private float minGreenTime = 5.0f;
-    private float maxGreenTime = 30.0f;
+    private float fixedGreenDuration = 50.0f; 
+    private float minGreenTime = 2.0f;
+    private float maxGreenTime = 20.0f; 
     private float weightPerCar = 1.0f;
-    private float weightPerSecondWaited = 0.5f;
-    public float totalWastedGreenTime = 0f;
+    private float weightPerSecondWaited = 2.5f; 
+
     private float yellowLightDuration = 3.0f;
     private float allRedSafetyTime = 1.0f;
 
@@ -39,11 +41,12 @@ public class TrafficLightGroup : MonoBehaviour
 
     void Start()
     {
+        currentMode = TrafficMode.BasicLoop;
         if (lightGroups.Count == 0) return;
 
-        //Initialize all to Red
         foreach (var group in lightGroups) SetGroupState(group, LightColor.Red);
 
+        StopAllCoroutines();
         StartCoroutine(TrafficCycleRoutine());
     }
 
@@ -52,7 +55,17 @@ public class TrafficLightGroup : MonoBehaviour
     /// </summary>
     public void ChangeMode(TrafficMode mode)
     {
-        currentMode = mode;
+        if (lightGroups.Count == 0)
+        {
+            return;
+        }
+
+        if (currentMode != mode)
+        {
+            currentMode = mode;
+            StopAllCoroutines();
+            StartCoroutine(TrafficCycleRoutine());
+        }
     }
 
     /// <summary>
@@ -60,38 +73,66 @@ public class TrafficLightGroup : MonoBehaviour
     /// </summary>
     private IEnumerator TrafficCycleRoutine()
     {
+        if (lightGroups.Count == 0) yield break;
+
+        currentGroupIndex = 0;
+
+        foreach (var group in lightGroups) SetGroupState(group, LightColor.Red);
+
         while (true)
         {
-            //Pick next group based on mode
+            int previousGroupIndex = currentGroupIndex;
+
             if (currentMode == TrafficMode.BasicLoop)
             {
                 currentGroupIndex = (currentGroupIndex + 1) % lightGroups.Count;
             }
-            else
+            else 
             {
                 currentGroupIndex = SelectNextSmartGroup(currentGroupIndex);
             }
 
+
+            //turn prev yellow then red
+            LaneGroup previousGroup = lightGroups[previousGroupIndex];
+
+            if (currentGroupIndex != previousGroupIndex)
+            {
+                SetGroupState(previousGroup, LightColor.Yellow);
+                yield return new WaitForSeconds(yellowLightDuration);
+
+                SetGroupState(previousGroup, LightColor.Red);
+                yield return new WaitForSeconds(allRedSafetyTime);
+            }
+
+            //green phase
             LaneGroup currentGroup = lightGroups[currentGroupIndex];
 
-            //Green light for selected group
             SetGroupState(currentGroup, LightColor.Green);
 
-            //Wait for green duration based on mode
             float timeElapsed = 0f;
             float limit = (currentMode == TrafficMode.BasicLoop) ? fixedGreenDuration : maxGreenTime;
 
             while (timeElapsed < limit)
             {
                 CalculateGlobalPainScore();
-                UpdateWastedTime(currentGroup); 
 
                 if (currentMode == TrafficMode.SmartAI)
                 {
-                    // Smart Mode: Early Exit if empty
+                    //Early Exit if empty
                     if (timeElapsed > minGreenTime && GetTotalCarsInGroup(currentGroup) == 0)
                     {
                         break;
+                    }
+
+                    //Terminate if high pain elsewhere
+                    if (timeElapsed > minGreenTime)
+                    {
+                        float nextBestScore = GetHighestScoreExcluding(currentGroupIndex);
+                        if (nextBestScore > 10.0f && GetTotalCarsInGroup(currentGroup) < 2) 
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -99,20 +140,13 @@ public class TrafficLightGroup : MonoBehaviour
                 yield return null;
             }
 
-            //yellow light for current group
-            SetGroupState(currentGroup, LightColor.Yellow);
-            yield return new WaitForSeconds(yellowLightDuration);
-
-            //red light for current group
-            SetGroupState(currentGroup, LightColor.Red);
-            yield return new WaitForSeconds(allRedSafetyTime);
         }
     }
 
 
     public void ResetStats()
     {
-        totalWastedGreenTime = 0f;
+        
     }
 
     /// <summary>
@@ -120,51 +154,58 @@ public class TrafficLightGroup : MonoBehaviour
     /// </summary>
     private int SelectNextSmartGroup(int currentlyActiveIndex)
     {
+        if (lightGroups.Count == 0) return 0;
+
         int bestIndex = -1;
         float highestScore = -1f;
 
-        //check all groups to find the best score
-        for (int i = 0; i < lightGroups.Count; i++)
-        {
-            float score = CalculateGroupScore(lightGroups[i]);
-
-            if (score > highestScore)
-            {
-                highestScore = score;
-                bestIndex = i;
-            }
-        }
-
-        //if lanes are empty, just go to the next in line
+        //If the winning score is less than 0.1, cycle to the next group
         if (highestScore <= 0.1f)
         {
             return (currentlyActiveIndex + 1) % lightGroups.Count;
         }
 
-        //if the best is the currently active, try to find a second best
+        //If the best is the currently active
         if (bestIndex == currentlyActiveIndex)
         {
+            //if current has no cars, force switch
+            if (GetTotalCarsInGroup(lightGroups[currentlyActiveIndex]) == 0)
+            {
+                return (currentlyActiveIndex + 1) % lightGroups.Count;
+            }
+
+            //second best logic
             int secondBestIndex = -1;
             float secondBestScore = -1f;
 
-            for (int i = 0; i < lightGroups.Count; i++)
-            {
-                if (i == currentlyActiveIndex) continue;
-
-                float s = CalculateGroupScore(lightGroups[i]);
-                if (s > 0.1f && s > secondBestScore)
-                {
-                    secondBestScore = s;
-                    secondBestIndex = i;
-                }
-            }
-
             if (secondBestIndex != -1) return secondBestIndex;
-            return currentlyActiveIndex; //No one else waiting, keep green
+
+            return currentlyActiveIndex;
         }
 
         return bestIndex;
     }
+
+    /// <summary>
+    /// Finds the highest score among groups NOT currently active.
+    /// </summary>
+    private float GetHighestScoreExcluding(int excludedIndex)
+    {
+        float maxScore = 0f;
+        for (int i = 0; i < lightGroups.Count; i++)
+        {
+            if (i == excludedIndex) continue;
+
+            float score = CalculateGroupScore(lightGroups[i]);
+            if (score > maxScore)
+            {
+                maxScore = score;
+            }
+        }
+        return maxScore;
+    }
+
+
     /// <summary>
     /// Calculates the score for a lane group based on number of cars and their wait times.
     /// </summary>
@@ -219,12 +260,4 @@ public class TrafficLightGroup : MonoBehaviour
     }
 
 
-    private void UpdateWastedTime(LaneGroup activeGroup)
-    {
-        //If the light is green but no cars are present, we are wasting time
-        if (GetTotalCarsInGroup(activeGroup) == 0)
-        {
-            totalWastedGreenTime += Time.deltaTime;
-        }
-    }
 }

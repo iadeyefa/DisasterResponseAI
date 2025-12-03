@@ -94,7 +94,7 @@ public class VehicleSpawner : MonoBehaviour
         {
             newLane = allLanes[UnityEngine.Random.Range(0, allLanes.Count)];
         }
-        while (newLane == excludeLane);
+        while (newLane == excludeLane || newLane.isIntersectionLane);
 
         return newLane;
     }

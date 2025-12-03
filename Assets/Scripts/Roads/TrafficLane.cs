@@ -429,6 +429,8 @@ public class TrafficLane : MonoBehaviour
             targetColor = Color.yellow;
         }
 
+
+
         lr.startColor = targetColor;
         lr.endColor = targetColor;
     }

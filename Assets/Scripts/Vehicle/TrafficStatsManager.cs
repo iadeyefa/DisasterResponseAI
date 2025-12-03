@@ -23,11 +23,8 @@ public class TrafficStatsManager : MonoBehaviour
     }
 
 
-
     [Header("UI References")]
-    public TextMeshProUGUI maxWaitText;     
-    public TextMeshProUGUI throughputText;   
-    public TextMeshProUGUI wastedTimeText;  
+    public TextMeshProUGUI throughputText;
     public TextMeshProUGUI avgWaitText;
 
     public Toggle overlayToggle;
@@ -41,17 +38,21 @@ public class TrafficStatsManager : MonoBehaviour
     private float uiUpdateRate = 0.5f;
     private float sumOfAllWaitTimes = 0f;
 
+    private List<KeyValuePair<float, float>> finishedCarData = new List<KeyValuePair<float, float>>();
 
     void Start()
     {
         startTime = Time.time;
-        controllers = FindObjectsOfType<TrafficLightGroup>();
+        
     }
-
 
 
     void Update()
     {
+        if(controllers == null || controllers.Length == 0)
+        {
+            controllers = FindObjectsOfType<TrafficLightGroup>();
+        }
         timer += Time.deltaTime;
         if (timer >= uiUpdateRate)
         {
@@ -64,6 +65,7 @@ public class TrafficStatsManager : MonoBehaviour
             timer = 0f;
         }
     }
+
     /// <summary>
     /// Switch between Basic and Smart AI modes
     /// </summary>
@@ -73,21 +75,55 @@ public class TrafficStatsManager : MonoBehaviour
             ? TrafficMode.SmartAI
             : TrafficMode.BasicLoop;
 
-        for (int i = 0; i < controllers.Length; i++)
+        for (int i = 0; i<controllers.Length; i++)
         {
             controllers[i].ChangeMode(newMode);
         }
 
         ResetAllStats();
     }
+
     /// <summary>
-    /// Car calls this function when it leaves an intersection
+    /// Car calls this function when it leaves a monitored lane segment.
     /// </summary>
-    public void RegisterCarFinished(float finalWaitTime)
+    public void RegisterCarThroughIntersection(float finalWaitTime)
     {
         carsFinishedCount++;
-        sumOfAllWaitTimes += finalWaitTime; 
+        sumOfAllWaitTimes += finalWaitTime;
+        // Record the time of completion and the car's final wait time
+        finishedCarData.Add(new KeyValuePair<float, float>(Time.time, finalWaitTime));
     }
+
+    /// <summary>
+    /// Calculates throughput (cars/min) and average wait time for the last 60 seconds
+    /// </summary>
+    private (float throughput, float avgWait) GetLastMinuteStats()
+    {
+        float currentTime = Time.time;
+        float cutoffTime = currentTime - 60.0f;
+        float sumOfLastMinuteWaitTimes = 0f;
+
+        // Efficiently remove cars older than the cutoff time (60 seconds ago)
+        while (finishedCarData.Count > 0 && finishedCarData[0].Key < cutoffTime)
+        {
+            finishedCarData.RemoveAt(0);
+        }
+
+        int carsInLastMinute = finishedCarData.Count;
+
+        // Calculate the sum of wait times for the remaining cars
+        for (int i = 0; i < carsInLastMinute; i++)
+        {
+            sumOfLastMinuteWaitTimes += finishedCarData[i].Value;
+        }
+
+        float lastMinuteThroughput = carsInLastMinute;
+        float lastMinuteAvgWait = (carsInLastMinute > 0) ? (sumOfLastMinuteWaitTimes / carsInLastMinute) : 0f;
+
+        return (lastMinuteThroughput, lastMinuteAvgWait);
+    }
+
+
     /// <summary>
     /// Gets all the cars in the scene
     /// </summary>
@@ -95,44 +131,24 @@ public class TrafficStatsManager : MonoBehaviour
     {
         allVehicles = FindObjectsOfType<TrafficVehicle>().ToList();
     }
+
     /// <summary>
     /// Calculate and update all stats
     /// </summary>
     private void CalculateStats()
     {
-        //max wait time
-        float maxWait = 0f;
-        foreach (var car in allVehicles)
-        {
-            if (car != null && car.isActiveAndEnabled)
-            {
-                if (car.tracker.GetTotalWaitTime() > maxWait)
-                {
-                    maxWait = car.tracker.GetTotalWaitTime();
-                }
-            }
-        }
-        if (maxWaitText) maxWaitText.text = $"Max Wait: {maxWait:F1}s";
+  
 
-        //Throughput
-        float timeRunning = Time.time - startTime;
-        float cpm = (carsFinishedCount / timeRunning) * 60.0f;
-        if (throughputText) throughputText.text = $"Throughput: {cpm:F1} cars/min";
+        //Calculate Last Minute Throughput and Avg Wait Time
+        (float lastMinThroughput, float lastMinAvgWait) = GetLastMinuteStats();
 
-        //Wasted time
-        float totalWaste = 0f;
-        foreach(var con in controllers) totalWaste += con.totalWastedGreenTime;
-        if(wastedTimeText) wastedTimeText.text = $"Wasted Green: {totalWaste:F1}s";
+        //Throughput UI Update
+        if (throughputText) throughputText.text = $"Throughput (Last Min): {lastMinThroughput:F1} cars/min";
 
-        //average time
-        float avgWait = (carsFinishedCount > 0) ? (sumOfAllWaitTimes / carsFinishedCount) : 0f;
-        avgWaitText.text = $"Avg Wait: {avgWait:F1}s";
-
-
-
-
-       
+        //Average Wait Time UI Update (Last Minute)
+        avgWaitText.text = $"Avg Wait (Last Min): {lastMinAvgWait:F1}s";
     }
+
     /// <summary>
     /// Reset all stats
     /// </summary>
@@ -140,13 +156,15 @@ public class TrafficStatsManager : MonoBehaviour
     {
         startTime = Time.time;
         carsFinishedCount = 0;
+        sumOfAllWaitTimes = 0f;
+        finishedCarData.Clear(); // Clears the list for last-minute tracking
 
         foreach (var con in controllers)
         {
             con.ResetStats();
         }
 
-        RefreshCarList(); 
+        RefreshCarList();
         foreach (var car in allVehicles)
         {
             if (car != null) car.tracker.ResetWaitTime();
@@ -155,33 +173,7 @@ public class TrafficStatsManager : MonoBehaviour
         CalculateStats();
     }
 
-    public float GetCurrentMaxWait()
-    {
-        float max = 0f;
-        foreach (var car in allVehicles)
-            if (car != null)
-                max = Mathf.Max(max, car.tracker.GetTotalWaitTime());
-        return max;
-    }
 
-    public float GetCurrentAvgWait()
-    {
-        if (carsFinishedCount == 0) return 0f;
-        return sumOfAllWaitTimes / carsFinishedCount;
-    }
 
-    public float GetCurrentThroughput()
-    {
-        float runtime = Time.time - startTime;
-        return (carsFinishedCount / runtime) * 60f;
-    }
-
-    public float GetCurrentWaste()
-    {
-        float total = 0f;
-        foreach (var c in controllers)
-            total += c.totalWastedGreenTime;
-        return total;
-    }
 
 }
