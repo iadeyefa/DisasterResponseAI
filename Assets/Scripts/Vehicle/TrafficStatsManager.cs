@@ -75,9 +75,13 @@ public class TrafficStatsManager : MonoBehaviour
             ? TrafficMode.SmartAI
             : TrafficMode.BasicLoop;
 
+
+        float maxOffset = (newMode == TrafficMode.BasicLoop) ? 20.0f : 0f;
+
         for (int i = 0; i<controllers.Length; i++)
         {
-            controllers[i].ChangeMode(newMode);
+            float randomDelay = UnityEngine.Random.Range(0f, maxOffset);
+            controllers[i].ChangeMode(newMode, randomDelay);
         }
 
         ResetAllStats();
@@ -143,10 +147,10 @@ public class TrafficStatsManager : MonoBehaviour
         (float lastMinThroughput, float lastMinAvgWait) = GetLastMinuteStats();
 
         //Throughput UI Update
-        if (throughputText) throughputText.text = $"Throughput (Last Min): {lastMinThroughput:F1} cars/min";
+        if (throughputText) throughputText.text = $"{lastMinThroughput:F1} cars/min";
 
         //Average Wait Time UI Update (Last Minute)
-        avgWaitText.text = $"Avg Wait (Last Min): {lastMinAvgWait:F1}s";
+        avgWaitText.text = $"{lastMinAvgWait:F1}s";
     }
 
     /// <summary>

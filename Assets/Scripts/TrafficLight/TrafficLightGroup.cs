@@ -41,7 +41,7 @@ public class TrafficLightGroup : MonoBehaviour
 
     public bool useRandomStagger = true;
     public float minStaggerDelay = 0f;
-    public float maxStaggerDelay = 20f;
+    public float maxStaggerDelay = 100f;
 
     void Start()
     {
@@ -67,7 +67,7 @@ public class TrafficLightGroup : MonoBehaviour
     /// <summary>
     /// Call this from UI Button to switch modes dynamically.
     /// </summary>
-    public void ChangeMode(TrafficMode mode)
+    public void ChangeMode(TrafficMode mode, float delay = 0f)
     {
         if (lightGroups.Count == 0)
         {
@@ -78,7 +78,10 @@ public class TrafficLightGroup : MonoBehaviour
         {
             currentMode = mode;
             StopAllCoroutines();
-            StartCoroutine(TrafficCycleRoutine(0f));
+            currentMode = mode;
+            StopAllCoroutines();
+
+            StartCoroutine(TrafficCycleRoutine(delay));
         }
     }
 
@@ -178,31 +181,25 @@ public class TrafficLightGroup : MonoBehaviour
         int bestIndex = -1;
         float highestScore = -1f;
 
-        //If the winning score is less than 0.1, cycle to the next group
+        for (int i = 0; i < lightGroups.Count; i++)
+        {
+            if (i == currentlyActiveIndex) continue; 
+
+            float s = CalculateGroupScore(lightGroups[i]);
+            if (s > highestScore)
+            {
+                highestScore = s;
+                bestIndex = i;
+            }
+        }
+
         if (highestScore <= 0.1f)
         {
             return (currentlyActiveIndex + 1) % lightGroups.Count;
         }
 
-        //If the best is the currently active
-        if (bestIndex == currentlyActiveIndex)
-        {
-            //if current has no cars, force switch
-            if (GetTotalCarsInGroup(lightGroups[currentlyActiveIndex]) == 0)
-            {
-                return (currentlyActiveIndex + 1) % lightGroups.Count;
-            }
-
-            //second best logic
-            int secondBestIndex = -1;
-            float secondBestScore = -1f;
-
-            if (secondBestIndex != -1) return secondBestIndex;
-
-            return currentlyActiveIndex;
-        }
-
         return bestIndex;
+
     }
 
     /// <summary>

@@ -29,7 +29,7 @@ public class TimescaleManager : MonoBehaviour
     {
         Time.timeScale = 40f;
     }
-    private float timer = 10;
+    private float timer = 40;
     private void Update()
     {
         if(panel.gameObject.activeSelf)
